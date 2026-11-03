@@ -38,3 +38,39 @@ pub fn decode_keypath(v: &Value) -> Result<DerivationPath, SignerError> {
 
     Ok(DerivationPath { components })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ciborium::value::Integer;
+
+    fn keypath(components: Vec<Value>) -> Value {
+        Value::Map(vec![(Value::Integer(Integer::from(1)), Value::Array(components))])
+    }
+
+    #[test]
+    fn decodes_tagged_and_untagged_keypaths() {
+        let comps = vec![
+            Value::Integer(Integer::from(44)),
+            Value::Bool(true),
+            Value::Integer(Integer::from(60)),
+            Value::Bool(true),
+            Value::Integer(Integer::from(0)),
+            Value::Bool(false),
+        ];
+        let plain = keypath(comps.clone());
+        assert_eq!(decode_keypath(&plain).unwrap().to_string(), "m/44'/60'/0");
+        let tagged = Value::Tag(304, Box::new(keypath(comps)));
+        assert_eq!(decode_keypath(&tagged).unwrap().to_string(), "m/44'/60'/0");
+    }
+
+    #[test]
+    fn rejects_ranges_and_out_of_range_indices() {
+        let range = keypath(vec![Value::Array(vec![]), Value::Bool(false)]);
+        assert!(decode_keypath(&range).is_err());
+        let big = keypath(vec![Value::Integer(Integer::from(0x8000_0000u64)), Value::Bool(false)]);
+        assert!(decode_keypath(&big).is_err());
+        let odd = keypath(vec![Value::Integer(Integer::from(1))]);
+        assert!(decode_keypath(&odd).is_err());
+    }
+}

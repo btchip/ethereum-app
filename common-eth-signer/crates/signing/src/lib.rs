@@ -7,7 +7,7 @@ mod sign;
 pub use hashing::signing_hash;
 pub use seed::{
     address_of, address_of_public, key_from_entropy, key_from_seed, seed_from_entropy, AccountKey,
-    AccountXpub,
+    AccountXpub, PublicNode,
 };
 pub use sign::sign_request;
 

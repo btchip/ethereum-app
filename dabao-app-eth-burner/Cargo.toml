@@ -1,0 +1,57 @@
+[package]
+name = "dabao-eth-burner"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Ethereum burner signer for a bare dabao (Xous, no screen, USB HID)"
+
+# Built on its own, then handed to xous-core's xtask as a binary.
+[workspace]
+
+[[bin]]
+name = "eth-burner"
+path = "src/main.rs"
+
+[dependencies]
+log = "0.4.14"
+xous = "0.9.71"
+xous-names = { package = "xous-api-names", version = "0.9.72" }
+log-server = { package = "xous-api-log", version = "0.1.70" }
+ciborium = "0.2"
+
+# Ethereum: derivation, addresses, ERC-4527 decoding and signing
+signer-core = { path = "../common-eth-signer/crates/core" }
+signer-signing = { path = "../common-eth-signer/crates/signing" }
+signer-decoding = { path = "../common-eth-signer/crates/decoding" }
+
+# seed creation and storage
+sha2 = "0.10"
+zeroize = "1.7"
+getrandom = "0.2"
+
+# device builds only: USB HID transport and keystore app slots (only the IPC
+# types: the keystore crate is a server)
+usb-bao1x = { path = "../../xous-core/services/usb-bao1x", optional = true }
+# not used directly: the usb-bao1x client needs bao1x-api's std items
+bao1x-api = { path = "../../xous-core/libs/bao1x-api", optional = true, features = ["std"] }
+keystore-api = { path = "../../xous-core/libs/keystore-api", optional = true, features = ["gen2", "app-keys"] }
+xous-ipc = { version = "0.10.11", optional = true }
+utralib = { version = "0.1.27", optional = true, default-features = false }
+
+[features]
+board-dabao = ["usb-bao1x", "bao1x-api", "keystore-api", "xous-ipc"]
+bao1x = ["utralib/bao1x"]
+
+[patch.crates-io]
+getrandom = { path = "../../xous-core/imports/getrandom" }
+usb-device = { git = "https://github.com/betrusted-io/usb-device.git", branch = "main" }
+utralib = { path = "../../xous-core/utralib" }
+svd2utra = { path = "../../xous-core/svd2utra" }
+
+[profile.release]
+codegen-units = 1
+debug = false
+strip = false
+lto = "fat"
+incremental = true
+opt-level = "s"

@@ -26,6 +26,10 @@ In this version the signer is airgapped using [ERC-4527](https://github.com/ethe
 
 Future versions will implement different bearers and optionally [Clear Signing](https://clearsigning.org/), with additional third party dependencies
 
+## dabao-app-eth-burner
+
+A burner signer for the [Xous microkernel](https://github.com/betrusted-io/xous-core) on a bare dabao (no screen): a random seed is created on the first boot from the chip TRNG, and every request received over USB HID is signed at once, without review. For test networks and small amounts only; see its [README](dabao-app-eth-burner/README.md)
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) for up to date information

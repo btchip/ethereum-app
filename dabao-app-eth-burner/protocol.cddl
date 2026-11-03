@@ -1,0 +1,87 @@
+; dabao Ethereum burner: custom CBOR protocol (message type 0x02).
+;
+; Transport envelope (both directions, all transports):
+;   length (4 bytes, big-endian) || type (1 byte) || message
+; `length` counts `type` and `message`, at most 65536.
+; type 0x01: ERC-4527 CBOR. Request: eth-sign-request. Supported data types:
+;            1 eth-transaction-data (legacy, EIP-155 or pre-EIP-155),
+;            2 eth-typed-data (EIP-712 JSON, v = 27/28),
+;            3 eth-raw-bytes (EIP-191 personal_sign, v = 27/28) and
+;            4 eth-typed-transaction (EIP-1559, EIP-7702).
+;            The burner has no screen: every request is signed at once,
+;            without review.
+;            Reply on success: eth-signature (type 0x01), with request-id echoed.
+;            Any failure (decoding, `address` not matching this device's key
+;            at the path) is an error-response in a type 0x02 envelope.
+; type 0x02: the messages below.
+; Over USB HID the envelope is cut into 64-byte reports, the last one padded
+; with zeros; one request at a time.
+
+request = get-address / get-version
+
+; Return the public key, address and chain code at `path`, at once.
+get-address = {
+  command: 1,
+  path: #6.304(crypto-keypath),   ; ERC-4527 crypto-keypath (tag optional)
+}
+
+; Return the application version.
+get-version = {
+  command: 2,
+}
+
+response = address-response / version-response / error-response
+
+address-response = {
+  status: 0,
+  public-key: bytes .size 65,     ; uncompressed SEC1: 0x04 || x || y
+  address: text,                  ; EIP-55 checksummed, "0x" + 40 hex digits
+  chain-code: bytes .size 32,     ; BIP-32 chain code of the key
+}
+
+version-response = {
+  status: 0,
+  version: text,                  ; e.g. "0.1.0"
+}
+
+error-response = {
+  status: error-code,
+  ? message: text,
+}
+
+error-code = &(
+  user-rejected: 1,               ; not used by the burner (no user approval)
+  invalid-request: 2,             ; bad envelope, CBOR or keypath
+  unsupported: 3,                 ; unknown command or message type
+  busy: 4,                        ; not used by the burner
+  internal: 5,
+  not-ready: 6,                   ; not used by the burner
+)
+
+command = 1
+path = 2
+status = 1
+public-key = 2
+address = 3
+chain-code = 4
+version = 5
+message = 6
+
+; from ERC-4527 (crypto-keypath, CDDL for key path); index ranges and
+; wildcards are rejected by this application
+crypto-keypath = {
+  components: [* path-component],
+  ? source-fingerprint: uint32 .ne 0,
+  ? depth: uint8,
+}
+path-component = (child-index / child-index-range / child-index-wildcard-range, is-hardened)
+uint8 = uint .size 1
+uint32 = uint .size 4
+uint31 = uint32 .lt 2147483648
+child-index = uint31
+child-index-range = [child-index, child-index]
+child-index-wildcard-range = []
+is-hardened = bool
+components = 1
+source-fingerprint = 2
+depth = 3

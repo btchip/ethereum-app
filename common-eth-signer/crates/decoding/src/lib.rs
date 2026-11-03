@@ -17,5 +17,6 @@ mod value;
 
 pub use encode::encode_eth_signature;
 pub use hdkey::encode_crypto_hdkey;
+pub use keypath::decode_keypath;
 pub use request::decode_sign_request;
 pub use tx::{decode_eip1559, decode_eip7702, decode_legacy, decode_sign_data, decode_typed_tx};
