@@ -1,0 +1,19 @@
+# poseidon-rust from the Kohaku SDK (ZKNoxHQ/kohaku-rs crates/poseidon-rust, rev 7043d3b; originally
+# TaceoLabs/poseidon-rust), trimmed to the widths the signer uses: see README.md.
+[package]
+version = "0.1.0"
+edition = "2021"
+name = "poseidon-rust"
+authors = ["TACEO GmbH <hello@taceo.io>"]
+repository = "https://github.com/TaceoLabs/poseidon-rust"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+ark-bn254 = "0.6"
+ark-ff = "0.6"
+ark-serialize = "0.6"
+itertools = "0.14"
+num-bigint = "0.4.6"
+num-traits = "0.2.19"
+thiserror = "2"
