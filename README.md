@@ -26,6 +26,10 @@ In this version the signer is airgapped using [ERC-4527](https://github.com/ethe
 
 Future versions will implement different bearers and optionally [Clear Signing](https://clearsigning.org/), with additional third party dependencies
 
+## dabao-app-railgun-signer
+
+A signer for the [Xous microkernel](https://github.com/betrusted-io/xous-core) on a bare dabao (no screen), built on the dabao Ethereum burner (`dabao-burner` branch): a random seed created on the first boot from the chip TRNG, every request received over USB HID signed at once, without review, plus the Railgun requests of the ZKNOX Ledger app (spending and viewing keys, viewing key export, Poseidon-EdDSA signing, 0zk address) for [rsgun-wallet](https://github.com/ZKNoxHQ/rsgun-wallet)'s `railgun-dabao` signer, and the burner's Ethereum requests for the wallet's public account. Same seed, same warnings; see its [README](dabao-app-railgun-signer/README.md)
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) for up to date information
