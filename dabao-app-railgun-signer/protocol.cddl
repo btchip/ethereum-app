@@ -1,0 +1,181 @@
+; dabao Railgun signer: CBOR protocol.
+;
+; The Railgun commands of the ZKNOX Ledger app (ZKN-HW-RAILGUN, docs/APDU_PROD.md),
+; as used by railgun-ledger/src/protocol.rs, carried over the dabao Ethereum burner
+; protocol (ethereum-app dabao-app-eth-burner/protocol.cddl). The Ethereum part is
+; unchanged: same envelope, same types, same get-address and eth-sign-request.
+;
+; Transport envelope (both directions, all transports):
+;   length (4 bytes, big-endian) || type (1 byte) || message
+; `length` counts `type` and `message`, at most 65536.
+; Device: vendor HID (usage page 0xFF00), envelope cut into 64-byte reports, the
+; last one padded with zeros, one request at a time. Emulator: the raw envelopes
+; on TCP 127.0.0.1:7600.
+;
+; type 0x01: ERC-4527 eth-sign-request / eth-signature, exactly as the burner
+;            (legacy, EIP-1559, EIP-7702, EIP-712, EIP-191). Used for the
+;            wallet's public account (shield, approve).
+; type 0x02: the messages below.
+;
+; No screen: every request is answered at once, without review. Where the Ledger
+; app asks for approval (all the Railgun commands below), this device does not.
+;
+; Keys: one seed, the burner's (32 bytes of TRNG entropy, stored in the keystore
+; slots 132-133 with the same format, BIP-39 seed with an empty passphrase).
+;   Ethereum:          BIP-32 secp256k1 at the request's path; the wallet uses
+;                      m/44'/60'/0'/0/account, as for a mnemonic.
+;   Railgun spending:  m/44'/1984'/0'/0'/account'   } SLIP-0010 hardened-only,
+;   Railgun viewing:   m/420'/1984'/0'/0'/account'  } HMAC-SHA512 key "babyjubjub seed"
+; The Railgun paths are the Railgun engine's (Railway, the wallet's mnemonic
+; signer), not the Ledger app's (m/44'/1984'/account'/0'/0'): the two agree on
+; account 0 only. The Bandersnatch curve of the Ledger app is not supported.
+;
+; Byte order: every 32-byte number is big-endian (field elements as in the
+; Railgun SDK's U256). This differs from the Ledger BLIND_SIGN, whose message is
+; little-endian.
+
+request = get-address / get-version
+        / railgun-spending-key / railgun-viewing-key / railgun-viewing-private-key
+        / railgun-sign / railgun-address
+
+; --- unchanged from the burner -------------------------------------------------
+
+; Ethereum public key, address and chain code at `path`.
+get-address = {
+  command: 1,
+  path: #6.304(crypto-keypath),   ; ERC-4527 crypto-keypath (tag optional)
+}
+
+; Application version and name (Ledger GET_VERSION + GET_APP_NAME).
+get-version = {
+  command: 2,
+}
+
+; --- Railgun (new) ---------------------------------------------------------------
+
+; Ledger SPENDING_PUBKEY (0x01): BabyJubJub spending public key.
+railgun-spending-key = {
+  command: 3,
+  account: uint31,
+}
+
+; Ledger VIEWING_PUBKEY (0x10): ed25519 viewing public key.
+railgun-viewing-key = {
+  command: 4,
+  account: uint31,
+}
+
+; Ledger VIEWING_PRIVKEY (0x13): export the viewing private key, the raw
+; 32-byte derivation output (the ed25519 seed, not the clamped scalar): the
+; host uses it for note decryption and the nullifying key.
+railgun-viewing-private-key = {
+  command: 5,
+  account: uint31,
+}
+
+; Ledger BLIND_SIGN (0x12, BabyJubJub): Poseidon-EdDSA, as circomlib
+; signPoseidon, of the transaction's poseidon hash. `hash` must be below the
+; BN254 scalar field modulus, otherwise invalid-request.
+railgun-sign = {
+  command: 6,
+  account: uint31,
+  hash: bytes .size 32,
+}
+
+; Ledger RAILGUN_ADDRESS (0x14): the all-chains 0zk address.
+railgun-address = {
+  command: 7,
+  account: uint31,
+}
+
+response = address-response / version-response
+         / spending-key-response / viewing-key-response / viewing-private-key-response
+         / signature-response / railgun-address-response / error-response
+
+address-response = {
+  status: 0,
+  public-key: bytes .size 65,     ; uncompressed SEC1: 0x04 || x || y
+  address: text,                  ; EIP-55 checksummed, "0x" + 40 hex digits
+  chain-code: bytes .size 32,     ; BIP-32 chain code of the key
+}
+
+version-response = {
+  status: 0,
+  version: text,                  ; e.g. "0.1.0"
+  ? app-name: text,               ; "railgun-signer"; absent on the eth burner
+}
+
+spending-key-response = {
+  status: 0,
+  public-key: bytes .size 64,     ; BabyJubJub point: x (32) || y (32)
+}
+
+viewing-key-response = {
+  status: 0,
+  public-key: bytes .size 32,     ; ed25519, RFC 8032 compressed
+}
+
+viewing-private-key-response = {
+  status: 0,
+  private-key: bytes .size 32,
+}
+
+signature-response = {
+  status: 0,
+  signature: bytes .size 96,      ; R8.x (32) || R8.y (32) || S (32)
+}
+
+railgun-address-response = {
+  status: 0,
+  address: text,                  ; "0zk1…", 127 characters, chain id "all"
+}
+
+error-response = {
+  status: error-code,
+  ? message: text,
+}
+
+error-code = &(
+  user-rejected: 1,               ; not used (no user approval)
+  invalid-request: 2,             ; bad envelope, CBOR, keypath, account or hash
+  unsupported: 3,                 ; unknown command or message type
+  busy: 4,                        ; not used
+  internal: 5,
+  not-ready: 6,                   ; not used
+)
+
+; map keys
+; requests
+command = 1
+path = 2
+account = 3                       ; new
+hash = 4                          ; new
+; responses
+status = 1
+public-key = 2
+address = 3
+chain-code = 4
+version = 5
+message = 6
+app-name = 7                      ; new
+private-key = 8                   ; new
+signature = 9                     ; new
+
+uint31 = uint .lt 2147483648
+
+; from ERC-4527 (crypto-keypath); index ranges and wildcards are rejected
+crypto-keypath = {
+  components: [* path-component],
+  ? source-fingerprint: uint32 .ne 0,
+  ? depth: uint8,
+}
+path-component = (child-index / child-index-range / child-index-wildcard-range, is-hardened)
+uint8 = uint .size 1
+uint32 = uint .size 4
+child-index = uint31
+child-index-range = [child-index, child-index]
+child-index-wildcard-range = []
+is-hardened = bool
+components = 1
+source-fingerprint = 2
+depth = 3
