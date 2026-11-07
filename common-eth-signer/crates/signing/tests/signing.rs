@@ -316,3 +316,34 @@ fn the_public_account_node_derives_the_reference_address() {
 fn a_malformed_public_key_is_refused() {
     assert!(AccountXpub::from_parts(&[0u8; 33], [0u8; 32]).is_err());
 }
+
+/// `PublicNode` at m/44'/60'/0'/0/0, against vectors computed by an
+/// independent implementation (BIP-39/32, secp256k1, Keccak-256 in Python).
+#[test]
+fn public_node_matches_reference_vectors() {
+    use signer_signing::PublicNode;
+
+    let cases = [
+        (
+            [0u8; 16], // abandon x11 + about
+            "0437b0bb7a8288d38ed49a524b5dc98cff3eb5ca824c9f9dc0dfdb3d9cd600f299a6179912b7451c09896c4098eca7ce6b2e58330672795e847c4d6af44e024230",
+            "736094f4f24b67e838a4b3d23d31d229ca03e00c9bb99ce95da6d86e8b3847b5",
+            "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+        ),
+        (
+            // yellow x12: every 11-bit word is 2040 (0b11111111000)
+            [0xff, 0x1f, 0xe3, 0xfc, 0x7f, 0x8f, 0xf1, 0xfe, 0x3f, 0xc7, 0xf8, 0xff, 0x1f, 0xe3, 0xfc, 0x7f],
+            "04c4755e0a7a0f7082749bf46cdae4fcddb784e11428446a01478d656f588f94c17d02f3312b43364a0c480d628483c4fb4e3e9f687ac064717d90fdc42cfb6e0e",
+            "15366e3c29454f7b492e28d1d6a874aef7eed32c0437bbf11ccdb5eee8f6f16c",
+            "0xA27DF20E6579aC472481F0Ea918165d24bFb713b",
+        ),
+    ];
+    for (entropy, pubkey, chain, address) in cases {
+        let seed = signer_signing::seed_from_entropy(&entropy, "").unwrap();
+        let node = PublicNode::from_seed(&seed, &eth_path()).unwrap();
+        assert_eq!(hex::encode(node.uncompressed()), pubkey);
+        assert_eq!(hex::encode(node.chain_code()), chain);
+        assert_eq!(node.address().to_checksum(None), address);
+        assert_eq!(node.compressed()[1..], node.uncompressed()[1..33]);
+    }
+}

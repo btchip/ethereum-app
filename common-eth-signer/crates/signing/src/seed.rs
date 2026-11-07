@@ -116,6 +116,44 @@ impl AccountKey {
     }
 }
 
+/// The public half of the node at an arbitrary `path`: what an
+/// "export public key" command returns (uncompressed key, chain code, address).
+pub struct PublicNode {
+    key: VerifyingKey,
+    chain_code: [u8; 32],
+}
+
+impl PublicNode {
+    /// Derive the node at `path` from a 64-byte BIP-32 seed.
+    pub fn from_seed(seed: &[u8; 64], path: &DerivationPath) -> Result<Self, SignerError> {
+        let xprv = derive(XPrv::new(seed).map_err(derivation_err)?, path)?;
+        Ok(PublicNode { key: *xprv.private_key().verifying_key(), chain_code: xprv.attrs().chain_code })
+    }
+
+    /// Uncompressed SEC1 public key: `0x04 || x || y`.
+    pub fn uncompressed(&self) -> [u8; 65] {
+        let mut out = [0u8; 65];
+        out.copy_from_slice(self.key.to_encoded_point(false).as_bytes());
+        out
+    }
+
+    /// Compressed (33-byte) SEC1 public key.
+    pub fn compressed(&self) -> [u8; 33] {
+        let mut out = [0u8; 33];
+        out.copy_from_slice(self.key.to_encoded_point(true).as_bytes());
+        out
+    }
+
+    pub fn chain_code(&self) -> [u8; 32] {
+        self.chain_code
+    }
+
+    /// Ethereum address of the node; `to_checksum(None)` gives the EIP-55 form.
+    pub fn address(&self) -> Address {
+        address_of_public(&self.key)
+    }
+}
+
 /// The same account node as [`AccountKey`], reconstructed from its **public**
 /// parts alone: the compressed public key and chain code that a key custodian
 /// hands out (KeyOS's `os/ethereum-signer` returns exactly this pair from
